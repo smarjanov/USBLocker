@@ -1,0 +1,136 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+using System.IO;
+using System.Management;
+
+namespace ULock
+{
+
+    public partial class Form1 : Form
+    {
+        [System.Runtime.InteropServices.DllImportAttribute("user32.dll", EntryPoint = "BlockInput")]
+        [return: System.Runtime.InteropServices.MarshalAsAttribute(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool BlockInput([System.Runtime.InteropServices.MarshalAsAttribute(System.Runtime.InteropServices.UnmanagedType.Bool)] bool fBlockIt);
+
+
+        #region Declarations
+        private const int WM_DEVICECHANGE = 0x219;
+        private const int DBT_DEVICEARRIVAL = 0x8000;
+        private const int DBT_DEVICEREMOVECOMPLETE = 0x8004;
+        private const int DBT_DEVTYP_VOLUME = 0x00000002;
+        string deviceName;
+        bool inputBlocked;
+
+        //ERROR MARKS
+        string boolError = "b0001"; //boolean error - input is not blocked when it should be
+        string fileError = "f0001"; //file not found error
+        #endregion
+        public Form1()
+        {
+            InitializeComponent();
+            ReadDevice();
+        }
+
+
+        //windows events, on new device arrival
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            switch (m.Msg)
+            {
+                case WM_DEVICECHANGE:
+                switch ((int)m.WParam)
+                {
+                        case DBT_DEVICEARRIVAL:
+                            listBox1.Items.Add("New Device Detected.");
+                            ReadDevice();
+                                if(!inputBlocked)
+                                { 
+                                listBox1.Items.Add(boolError);
+                                }
+                            int devType = Marshal.ReadInt32(m.LParam, 4);
+
+                                if (devType == DBT_DEVTYP_VOLUME)
+                                {
+                                DevBroadcastVolume vol;
+                                vol = (DevBroadcastVolume)Marshal.PtrToStructure(m.LParam,typeof(DevBroadcastVolume));
+                                listBox1.Items.Add("Mask is " + vol.Mask);
+                                }
+
+                        break;
+
+                        case DBT_DEVICEREMOVECOMPLETE:
+
+                            listBox1.Items.Add("Device Removed.");
+                            BlockInput(true);
+
+                        break;
+                }
+                break;
+            }
+        }
+
+
+        //read all removable devices aka storage devices. add it to the GUI list, if there is a device, look for a file = 0000x2019
+        void ReadDevice()
+        {
+            DriveInfo[] mydrives = DriveInfo.GetDrives();
+            foreach (DriveInfo mydrive in mydrives)
+            {
+                if (mydrive.DriveType == DriveType.Removable)
+                {
+                    //Check for a drive with a specific name/volume/description
+                    deviceName =  mydrive.Name;
+                    listBox1.Items.Add(deviceName);
+                    ReadFileFromDevice();
+                }
+            }
+        }
+
+        //check the device for the correct file, read it and check if it has the correct key to unlock the computer
+        void ReadFileFromDevice()
+        {
+            string FileName = "0000x2019";
+            try { 
+                  string DeviceRead = File.ReadAllText(deviceName + FileName + ".txt");
+                   listBox1.Items.Add(DeviceRead);
+                 if(DeviceRead == "Vrkd73kfjf8232kdjgfjvk349fjkfjgl390fdjkkdk349fkjgui49fkdlo39fktg984") //spremiti kasnije kao parametar u txt.file enkriptirano
+                  {
+                    BlockInput(false);
+                    inputBlocked = false;
+                   }
+                   else
+                  {
+                    BlockInput(true);
+                     inputBlocked = true;
+                 }
+            }
+            catch(FileNotFoundException e) //catch the not file not found error
+            {
+
+                listBox1.Items.Add(fileError);
+                inputBlocked = true;
+                BlockInput(true);
+                listBox1.Items.Add("Plug in the correct USB key to use this computer!");
+                
+            }
+        }
+
+        void DecryptFile()
+        {
+            //DeviceRead = ///////////////
+        }
+
+
+    }
+    public partial class NativeMethods
+    {
+
+    }
